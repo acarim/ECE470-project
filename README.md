@@ -11,7 +11,7 @@ To test, download or clone all files in the repository to your computer and run 
 
 # PREREQUISITES AND RUNNING TESTS
 
-To run the files, you will need a current version of VREP and access to python. All the files should be saved in the same directory which ideally should be different from the locaation of the VREP location. then follow the steps below;
+To run the files, you will need a current version of VREP and access to python. All the files should be saved in the same directory which ideally should be different from the location of the VREP location. then follow the steps below;
   1. Open the update2 python code. 
   2. Open the circuit scene on vrep.
   3. Make sure the port no in the Client ID on python is the same as that on VREP. 
