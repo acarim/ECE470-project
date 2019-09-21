@@ -15,7 +15,7 @@ To run the files, you will need a current version of VREP and access to python. 
   1. Open the update2 python code. 
   2. Open the circuit scene on vrep.
   3. Make sure the port no in the Client ID on python is the same as that on VREP. 
-  4. Press play on the simulation on VREP
+  4. Play on the simulation on VREP
   5. Run the python script.
   
  A lonk to a YouTube vidoe showing the current simulation can be seen here
