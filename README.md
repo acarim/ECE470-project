@@ -24,8 +24,8 @@ To run the files, you will need a current version of VREP and access to python. 
  
  # AUTHORS
  
- Jacob Roing
- Alvaro
- Abdulmalik Carim
- Taofik 
+ Jacob Roing;
+ Alvaro;
+ Abdulmalik Carim;
+ Taofik ;
  Jason Sach
