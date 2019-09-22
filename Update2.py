@@ -62,11 +62,13 @@ if clientID!=-1:
         #print('err: ',errorCode)
 
         errorCode,detectionState,detectedPoint,detectedObjectHandle,detectedSurfaceNormalVector=vrep.simxReadProximitySensor(clientID,sensor_handle,vrep.simx_opmode_streaming) 
-        print('Sensor: ',np.linalg.norm(detectedPoint))
+        print('Sensor: ',detectionState)
 
-        if np.linalg.norm(detectedPoint) > 0 & away:
+        if detectionState and away:
             v = -v
             away = False
+        elif not(detectionState):
+            away = True
 
 
     # Now send some data to V-REP in a non-blocking fashion:
