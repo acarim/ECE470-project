@@ -137,7 +137,7 @@ if clientID!=-1:
             vrep.simxSetJointTargetPosition(clientID,steer_handle,steer_angle,vrep.simx_opmode_oneshot)
 
             for i in range(0,len(sensor_handles)):
-                errorCode,detectionState,detectedPoint,detectedObjectHandle,detectedSurfaceNormalVector=vrep.simxReadProximitySensor(clientID,frontSensor_handle,vrep.simx_opmode_streaming) 
+                errorCode,detectionState,detectedPoint,detectedObjectHandle,detectedSurfaceNormalVector=vrep.simxReadProximitySensor(clientID,sensor_handles[i],vrep.simx_opmode_streaming) 
                 if detectionState:
                     distances[i] = np.linalg.norm(detectedPoint)
                     print(distances)
