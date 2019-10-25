@@ -1,65 +1,81 @@
 import numpy as np
 import pandas as pd
 
-xdim = 20
-ydim = 20
-n = 300
-wallThickness = 0.6
-corridorWidth = 6
-cuboidSize = 0.6
-wallHeight = 1
-#Rectangles is an array containing the properties of each rectangle in the scene: [xcenter, ycenter, xdim, ydim]
-rectangles = [[0,0,cuboidSize,cuboidSize]]
 
-#Sinusoidal track boundary
-nsin = 50
-xsin = np.linspace(-xdim/2,xdim/2,nsin)
-for x in xsin:
-	rectangles.append([x, 5*np.sin(x*2*np.pi/xdim) + corridorWidth*0.5, wallThickness, wallThickness])
-	rectangles.append([x, 5*np.sin(x*2*np.pi/xdim) - corridorWidth*0.5, wallThickness, wallThickness])
+class Rectangle:
+    """
+        A rectangle contains the properties of each rectangle in the scene.
+    """
+
+    def __init__(self, x_center=None, y_center=None, x_dim=None, y_dim=None):
+        self.x_center = x_center
+        self.y_center = y_center
+        self.x_dim = x_dim
+        self.y_dim = y_dim
 
 
+class Map:
+    """
+        A Map does this and this...
+    """
 
-def boundCompare(x,a,b):
-	isin = False
-	lower = min(a,b)
-	higher = max(a,b)
-	if x>lower and x<higher:
-		isin = True
-	return isin
+    def __init__(self):
+        self.x_dim = 20
+        self.y_dim = 20
+        self.n = 50
+        self.map = np.zeros([self.n ** 2, 3])
+        self.wall_thickness = 0.6
+        self.corridor_width = 6
+        self.cuboid_size = 0.6
+        self.wall_height = 1
+        self.n_sin = 50  # Sinusoidal track boundary
+        self.rectangles = [Rectangle(x_center=0, y_center=0, x_dim=self.cuboid_size, y_dim=self.cuboid_size)]
+
+        for x in np.linspace(-self.x_dim / 2, self.x_dim / 2, self.n_sin):
+            for position in (-1, 1):
+                self.rectangles.append(
+                    Rectangle(
+                        x_center=x,
+                        y_center=5 * np.sin(x * 2 * np.pi / self.x_dim) + position * self.corridor_width * 0.5,
+                        x_dim=self.wall_thickness,
+                        y_dim=self.wall_thickness
+                    )
+                )
+
+    @staticmethod
+    def bound_compare(x, a, b):
+        return min(a, b) < x < max(a, b)
+
+    def create_map(self):
+        X = np.linspace(-self.x_dim / 2, self.x_dim / 2, self.n)
+        Y = np.linspace(-self.y_dim / 2, self.y_dim / 2, self.n)
+        out = 0.001 * np.ones([self.n, self.n])
+        counter = 0
+
+        for i, x in enumerate(X):
+            for j, y in enumerate(Y):
+                x_within_bounds = self.bound_compare(x, -(0.5 * self.x_dim - self.wall_thickness),
+                                                     (0.5 * self.x_dim - self.wall_thickness))
+                y_within_bounds = self.bound_compare(y, -(0.5 * self.y_dim - self.wall_thickness),
+                                                     (0.5 * self.y_dim - self.wall_thickness))
+                if not x_within_bounds or not y_within_bounds:
+                    out[i][j] = self.wall_height
+
+                for r in self.rectangles:
+                    x_within_bounds = self.bound_compare(x, r.x_center - 0.5 * r.x_dim, r.x_center + 0.5 * r.x_dim)
+                    y_within_bounds = self.bound_compare(y, r.y_center - 0.5 * r.y_dim, r.y_center + 0.5 * r.y_dim)
+                    if x_within_bounds and y_within_bounds:
+                        out[i][j] = self.wall_height
+
+                self.map[counter] = [x, y, out[i][j]]
+                counter += 1
+        return out
 
 
-X = np.linspace(-xdim/2,xdim/2,n)
-Y = np.linspace(-ydim/2,ydim/2,n)
-csv = 0.001*np.ones([n, n])
-
-for i in range(0,len(X)):
-	for j in range(0,len(Y)):
-		x = X[j]
-		y = Y[i]
-
-		#First off: Define bounding walls for the scene
-		if not(boundCompare(x,-(0.5*xdim - wallThickness),(0.5*xdim - wallThickness))) or not(boundCompare(y,-(0.5*ydim - wallThickness),(0.5*ydim - wallThickness))): 
-			csv[i][j] = wallHeight
-
-		for k in rectangles:
-			if boundCompare(x, k[0] - 0.5*k[2], k[0] + 0.5*k[2]) and boundCompare(y, k[1] - 0.5*k[3], k[1] + 0.5*k[3]):
-				csv[i][j] = wallHeight
-
-		# if boundCompare(x,-0.5*corridorWidth,0.5*corridorWidth): #Main Corridor
-		# 	if y<-(0.5*ydim - wallThickness) or y>(0.5*ydim - wallThickness):
-		# 		csv[i][j] = wallHeight
-		# 	else:
-		# 		csv[i][j] = 0
-		# else:
-		# 	csv[i][j] = wallHeight
-		# if boundCompare(x,0,cuboidSize) and boundCompare(y,cuboidSize,2*cuboidSize): #Cuboid 1
-		# 	csv[i][j] = wallHeight
-
-		# if boundCompare(x,0,cuboidSize) and boundCompare(y,-cuboidSize,-2*cuboidSize):
-		# 	csv[i][j] = wallHeight
-
-
-
+ourMap = Map()
+csv = ourMap.create_map()
+MapFile = ourMap.map
 df = pd.DataFrame(csv)
-df.to_csv('CSVmap.csv', header = False, index = False)
+df.to_csv('CSVmap.csv', header=False, index=False)
+df = pd.DataFrame(MapFile)
+df.to_csv('3Colmap.csv', header=False, index=False)

@@ -23,25 +23,12 @@ except:
     print ('')
 
 import time
+from BasicDriving import Drive
+from csvmap import Map
+from Particle_Filter import particleFilter
 
-def updateVelocity(motor_velocity,dVel):
-    #Evolution of Velocity
-    if motor_velocity < 20*dVel:
-        motor_velocity += dVel
-    else:
-        motor_velocity -= dVel
-    return motor_velocity
-
-def updateSteering(left,steer_angle,dSteer,max_steer_angle):
-    if left:
-        steer_angle -= dSteer
-        if steer_angle < -max_steer_angle:
-            left = False
-    else:
-        steer_angle += dSteer
-        if steer_angle > max_steer_angle:
-            left = True
-    return left, steer_angle
+#Load Map File
+MapFile = np.genfromtxt('3Colmap.csv', delimiter=',')
 
 
 print ('Program started')
@@ -54,6 +41,8 @@ if clientID!=-1:
     res,objs=vrep.simxGetObjects(clientID,vrep.sim_handle_all,vrep.simx_opmode_blocking)
 
     #Retrieve Handles
+    errorCode,vehicle_handle= vrep.simxGetObjectHandle(clientID,'Manta',vrep.simx_opmode_oneshot_wait)
+    print('vehicle_handle: ',errorCode)
     errorCode,steer_handle= vrep.simxGetObjectHandle(clientID,'steer_joint',vrep.simx_opmode_oneshot_wait)
     print('steer_handle: ',errorCode)
     errorCode,motor_handle= vrep.simxGetObjectHandle(clientID,'motor_joint',vrep.simx_opmode_oneshot_wait)
@@ -95,7 +84,9 @@ if clientID!=-1:
     brake_force=100
     printCounter = 0;
     left = True
-    distances = [100, 100, 100, 100] #Front, Back, Right, Left
+    sensorLength = 3
+    sensorN = 4
+    distances = sensorLength*np.ones(sensorN) #Front, Back, Right, Left
 
     if res==vrep.simx_return_ok:
         print ('Number of objects in the scene: ',len(objs))
@@ -128,21 +119,32 @@ if clientID!=-1:
         vrep.simxSetJointForce(clientID,motor_handle,motor_torque,vrep.simx_opmode_oneshot)
 
         if printCounter % 10000 == 0:
-            #print(steer_pos,rear_wheel_velocity)
-            motor_velocity = updateVelocity(motor_velocity,dVel)
-            vrep.simxSetJointTargetVelocity(clientID,motor_handle,motor_velocity,vrep.simx_opmode_oneshot)
 
-            #Evolution of Steering
-            left, steer_angle = updateSteering(left,steer_angle,dSteer,max_steer_angle)
+            #Control of Vehicle
+            motor_velocity, left, steer_angle = Drive(motor_velocity, left, steer_angle)
+            vrep.simxSetJointTargetVelocity(clientID,motor_handle,motor_velocity,vrep.simx_opmode_oneshot)
             vrep.simxSetJointTargetPosition(clientID,steer_handle,steer_angle,vrep.simx_opmode_oneshot)
+
+            #Simulated Compass Data
+            isHead, euler = vrep.simxGetObjectOrientation(clientID, vehicle_handle, -1, vrep.simx_opmode_oneshot_wait)
+            heading = euler[2] + 0.5*np.random.normal()
+
+            #Scaled estimation of vehicle movement
+            u_t = 0.5*motor_velocity*np.array([np.sin(heading), np.cos(heading)])
 
             for i in range(0,len(sensor_handles)):
                 errorCode,detectionState,detectedPoint,detectedObjectHandle,detectedSurfaceNormalVector=vrep.simxReadProximitySensor(clientID,sensor_handles[i],vrep.simx_opmode_streaming) 
                 if detectionState:
                     distances[i] = np.linalg.norm(detectedPoint)
-                    print(distances)
+                
                 else:
-                    distances[i] = 100
+                   distances[i] = 100
+
+            #Based on Vehicle Movement, Heading, and Sensor Distances, estimate position
+            estimatePosition, particles = particleFilter().runParticleFilter(u_t, MapFile, heading, distances)
+
+            print(estimatePosition)
+            #print(distances)
 
 
 
