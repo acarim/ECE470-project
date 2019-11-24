@@ -25,13 +25,12 @@ import time
 from BasicDriving import Drive
 from csvmap import Map
 from Particle_Filter import particleFilter
+from reduced_Map import reducedMap
 import matplotlib
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 plt.close('all')
 
-#Load Map File
-MapFile = np.genfromtxt('3Colmap.csv', delimiter=',')
 
 
 print ('Program started')
@@ -94,16 +93,20 @@ if clientID!=-1:
 	#Load Map File
 	MapFile = np.genfromtxt('3Colmap.csv', delimiter=',')
 	walls = np.array([x for x in MapFile if x[2]>0.001])
+	dimX = np.ptp(MapFile[:,0])
+	dimY = np.ptp(MapFile[:,1])
 
 	#Initialize Particle Filter
-	pf = particleFilter()
+	pf = particleFilter(dimX, dimY, sensorLength)
 	realPos = np.array([])
 	estPos = np.array([])
+	begin = True
 	# plt.ion()
 	# fig, ax = plt.subplots()
 	# ax.scatter(walls[:,0], walls[:,1], label='Walls')
 	# plt.show()
 	# time.sleep(0.2)
+
 
 	#Initial Position
 	prev = np.array([])
@@ -167,13 +170,20 @@ if clientID!=-1:
 				else:
 				   distances[i] = sensorLength
 
+			if begin:
+				estimatePosition = pos + np.multiply(np.array([dimX/10, dimY/10]), np.random.rand(2))
+				rM = reducedMap(MapFile, estimatePosition[0], estimatePosition[1], sensorLength)
+			else:
+				rM.propagateMotion(MapFile, estimatePosition[0], estimatePosition[1])
+
 			#Based on Vehicle Movement, Heading, and Sensor Distances, estimate position
-			estimatePosition, particles = pf.runParticleFilter(u_t, MapFile, heading, distances)
+			estimatePosition, particles = pf.runParticleFilter(u_t, rM.cutMap, heading, distances)
 			err = np.linalg.norm(np.array(pos) - estimatePosition)
-			print('Estimation Error(t = ', time.time()-startTime,'): ', err)
+			# print('Estimation Error(t = ', time.time()-startTime,'): ', err)
+			print('Estimated Position at t = ',int(time.time()-startTime),' : ', estimatePosition, '. Estimation Error: ', err)
 			realPos = np.append(realPos, np.array(pos), axis = 0)
 			estPos = np.append(estPos, estimatePosition, axis = 0)
-			print(realPos)
+			#print(realPos)
 
 			# print(estimatePosition)
 
@@ -204,13 +214,13 @@ if clientID!=-1:
 	# Now close the connection to V-REP:
 	vrep.simxFinish(clientID)
 
-	#Plot Evolution of Trajectories
-	fig, ax = plt.subplots()
-	ax.scatter(walls[:,0], walls[:,1], label='Walls')
-	ax.scatter(estPos[:][0], estPos[:][1], label='Estimated Trajectory')
-	ax.scatter(realPos[0], realPos[1], label='Actual Trajectory')
-	ax.legend(loc = 2)
-	plt.show()
+	# #Plot Evolution of Trajectories
+	# fig, ax = plt.subplots()
+	# ax.scatter(walls[:,0], walls[:,1], label='Walls')
+	# ax.scatter(estPos[:][0], estPos[:][1], label='Estimated Trajectory')
+	# ax.scatter(realPos[0], realPos[1], label='Actual Trajectory')
+	# ax.legend(loc = 2)
+	# plt.show()
 
 else:
 	print ('Failed connecting to remote API server')

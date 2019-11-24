@@ -1,20 +1,23 @@
 import numpy as np
 from csvmap import Map
 from Particle_Filter import particleFilter
+from reduced_Map import reducedMap
 import matplotlib
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-plt.close('all')
 import time
+start_time = time.time()
+
 
 
 #Load Map File
 MapFile = np.genfromtxt('3Colmap.csv', delimiter=',')
 walls = np.array([x for x in MapFile if x[2]>0.001])
+print("Load Map File: %s seconds" % (time.time() - start_time))
+start_time = time.time()
 
 #Simulate Robot Readings
-def readingMap(pos, Map, heading):
-	sensorLength = 3
+def readingMap(pos, Map, heading, sensorLength):
 	sensorN = 4
 	readings = sensorLength*np.ones(sensorN)
 	for i in range(0, sensorN):
@@ -41,22 +44,36 @@ def readingMap(pos, Map, heading):
 	return readings
 
 
-
 u_t = [0, 0]
 pos = [+3.3750e+00, +4.7500e+00]
+sensorLength = 3
+rM = reducedMap(MapFile, pos[0], pos[1], sensorLength)
+
+print("Create Reduced Map: %s seconds" % (time.time() - start_time))
+start_time = time.time()
+
 heading = 0
-distances = readingMap(pos, MapFile, heading) #Front, Left, Back, Right
+distances = readingMap(pos, rM.cutMap, heading, sensorLength) #Front, Left, Back, Right
+
+print("Map Reading: %s seconds" % (time.time() - start_time))
+start_time = time.time()
+
 print('Imposed Position: ', pos)
 print('Front, Left, Back, Right Sensors: ', distances)
 
 pf = particleFilter()
 
+print("Initialize Filter: %s seconds" % (time.time() - start_time))
+start_time = time.time()
+
 for i in range(0,1):
-	estimatePosition, particles = pf.runParticleFilter(u_t, MapFile, heading, distances)
+	estimatePosition, particles = pf.runParticleFilter(u_t, rM.cutMap, heading, distances)
 	err = np.linalg.norm(np.array(pos) - estimatePosition)
 	print('Estimated Position: ', estimatePosition)
 	print('Estimation Error: ', err)
 
+print("Run Filter: %s seconds" % (time.time() - start_time))
+start_time = time.time()
 
 
 fig, ax = plt.subplots()
@@ -65,4 +82,8 @@ ax.scatter(pf.particles[:,0], pf.particles[:,1], label='Particles')
 ax.scatter(estimatePosition[:][0], estimatePosition[:][1], label='Estimated Position')
 ax.scatter(pos[0], pos[1], label='Actual Position')
 ax.legend(loc = 2)
+print("Plot: %s seconds" % (time.time() - start_time))
+start_time = time.time()
 plt.show()
+
+

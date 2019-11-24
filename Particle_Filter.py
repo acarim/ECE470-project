@@ -3,14 +3,15 @@ import pandas as pd
 
 class particleFilter:
 	
-	def __init__(self, x_dim = 20, y_dim = 20):
+	def __init__(self, x_dim = 20, y_dim = 20, sensorLength = 3):
 		
 		self.numParticles = 100
 		self.dimension = 2
 		self.std = 5                                     
 		self.curMax = [x_dim/2, y_dim/2]                     
 		self.curMin = [-x_dim/2, -y_dim/2]                   
-		self.resNoise = [x*0.01 for x in self.curMax]   
+		self.resNoise = [x*0.01 for x in self.curMax]
+		self.sensorLength = sensorLength   
 		
 		############# The initial particles are uniformely distributed #############
 		
@@ -70,30 +71,35 @@ class particleFilter:
 
 	
 	def readingMap(self, pos, Map, heading):
-		sensorLength = 3
 		sensorN = 4
-		readings = sensorLength*np.ones(sensorN)
+		readings = self.sensorLength*np.ones(sensorN)
+		xrange = [min(Map[:,0]), max(Map[:,0])]
+		xVals = np.unique(Map[:,0])
+		yVals = np.unique(Map[:,1])
 		for i in range(0, sensorN):
 			theta = heading + i*(2*np.pi)/sensorN
-			ray = np.linspace(0, sensorLength, 20)    
+			ray = np.linspace(0, self.sensorLength, 20)    
 			for d in ray:
 				#Projection of sensor ray along its heading
 				far = pos + d*np.array([np.cos(theta), np.sin(theta)])
-				if far[0]<max(Map[:,0]) and far[0]>min(Map[:,0]) and far[1]<max(Map[:,1]) and far[1]>min(Map[:,1]):
+				#if far[0] < xrange[1] and far[0] > xrange[0] and far[1]<max(Map[:,1]) and far[1]>min(Map[:,1]):
 					#What point of the map corresponds to this projected point?
 					# higherX = [i for i,x in enumerate(Map[:,0] >= far[0]) if x]
 					# thatX = [i for i,x in enumerate(Map[:,0]) if x == Map[higherX[0],0]]
 					# higherY = [i for i, x in enumerate(Map[thatX,1] >= far[1]) if x] 
 					# higherY = [x + thatX[0] for x in higherY]
 
-					higherX = np.searchsorted(Map[:,0], far[0])
-					thatX = np.argwhere(Map[:,0] == Map[higherX,0])
-					higherY = np.searchsorted(Map[thatX[:,0],1], far[1]) + higherX
+				newCx = np.argmin(abs(xVals - far[0]))
+				newCy = np.argmin(abs(yVals - far[1]))
+				higherY = newCx*len(yVals) + newCy
+					# higherX = np.searchsorted(Map[:,0], far[0])
+					# thatX = np.argwhere(Map[:,0] == Map[higherX,0])
+					# higherY = np.searchsorted(Map[thatX[:,0],1], far[1]) + higherX
 
 					#Is there a wall at this projected point?
-					if Map[higherY,2]>0.001:
-						readings[i] = d
-						break
+				if Map[higherY,2]>0.001:
+					readings[i] = d
+					break
 		return readings
 	
 	def calcPosition(self):

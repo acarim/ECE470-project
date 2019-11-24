@@ -15,8 +15,11 @@ csvmap.py: File responsible of generating both .csv files respresenting the map 
 
 BasicDriving.py: Script in charge of imposing vehicle steer position and motor velocity. Should be replaced by a controller in charge of deciding these two parameters based on the current posiition and the next location along the trajectory.
 
-Particle_Filter.py: Script in charge of estimating the location of the Manta vehicle based on its sensor readings. Requires the introduction of a heading and of a reasonable value of u_t. The most computationally expensive part of the filter is the emulation of sensor readings at the particle locations, since the ray sensors require one to scan through the whole map defined by 3ColMap.csv, which is fairly intensive. Needs improvement in this aspect.
+Particle_Filter.py: Script in charge of estimating the location of the Manta vehicle based on its sensor readings. Requires the introduction of a heading and of a reasonable value of u_t. The introduction of a reduced map through reduced_Map.py allows for its computational effort to be reduced greatly.
 
 testFilter.py: Script in charge of testing the filter giving a known initial position in a static situation. This script does not communicate with V-Rep, only reads the map present in 3ColMap.csv.
 
 utMap.py: In a lousy try to determine the variation of vehicle position for every time step based on its steer position and motor speeds, this script tries to map a table of values for u_t by making the vehicle move in known steer positions and velocities. However, its results do not match the actual vehicle movement in reality. Generates a numpy array in file u_t.npz and employs the heightfield defined by Flat.csv.
+
+reduced_Map.py: This script extracts a snippet of the whole map defined by 3ColMap.csv, including only an area of interest around the vehicle. This area is set to be 1.5 the sensor length. This script is also in charge of propagating the vehicle's motion to this snippet, such that the region of interest moves along with the  estimated position of the vehicle.
+
