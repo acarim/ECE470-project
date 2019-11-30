@@ -1,17 +1,18 @@
 import numpy as np
-import pandas as pd
+from reduced_Map import reducedMap
 
 class particleFilter:
 	
 	def __init__(self, x_dim = 20, y_dim = 20, sensorLength = 3):
 		
-		self.numParticles = 100
+		self.numParticles = 500
 		self.dimension = 2
 		self.std = 5                                     
 		self.curMax = [x_dim/2, y_dim/2]                     
 		self.curMin = [-x_dim/2, -y_dim/2]                   
 		self.resNoise = [x*0.01 for x in self.curMax]
-		self.sensorLength = sensorLength   
+		self.sensorLength = sensorLength
+		self.sensorN = 8
 		
 		############# The initial particles are uniformely distributed #############
 		
@@ -22,9 +23,10 @@ class particleFilter:
 		# weights should be something like [1/num_of_particles, 1/num_of_particles, 1/num_of_particles, ...]
 
 		
-		self.particles = np.random.uniform(0,1,(self.numParticles,2))
+		self.particles = np.random.uniform(-1,1,(self.numParticles,2))
 		self.particles = np.multiply(self.particles,self.curMax)
 		self.weights = (1/self.numParticles)*np.ones(self.numParticles)
+		self.readings = np.zeros((self.numParticles, self.sensorN))
 		# print('########## INITIAL PARTICLE DISTRIBUTION ##########', type(self.particles))
 		# print(self.particles)
 
@@ -58,9 +60,14 @@ class particleFilter:
 		w_t = np.zeros((self.numParticles,1))
 
 		for i in range(0,self.numParticles):
+			rM = reducedMap(Map, self.particles[i, 0], self.particles[i, 1])
 			current = np.array(self.particles[i])
-			particleReading = np.array(self.readingMap(current, Map, heading))
+			particleReading = np.array(self.readingMap(current, rM.cutMap, heading))
 			w_t[i] = np.exp( - np.linalg.norm(particleReading - robotReading)**2 / (2*self.std))
+			self.readings[i, :] = particleReading
+			if sum(particleReading) == 0: #Directly exclude particles in walls
+				w_t[i] = 0
+
 
 		k = sum(w_t)
 		if k == 0:
@@ -71,13 +78,13 @@ class particleFilter:
 
 	
 	def readingMap(self, pos, Map, heading):
-		sensorN = 4
-		readings = self.sensorLength*np.ones(sensorN)
+		
+		readings = self.sensorLength*np.ones(self.sensorN)
 		xrange = [min(Map[:,0]), max(Map[:,0])]
 		xVals = np.unique(Map[:,0])
 		yVals = np.unique(Map[:,1])
-		for i in range(0, sensorN):
-			theta = heading + i*(2*np.pi)/sensorN
+		for i in range(0, self.sensorN):
+			theta = heading + i*(2*np.pi)/self.sensorN
 			ray = np.linspace(0, self.sensorLength, 20)    
 			for d in ray:
 				#Projection of sensor ray along its heading
@@ -92,6 +99,12 @@ class particleFilter:
 				newCx = np.argmin(abs(xVals - far[0]))
 				newCy = np.argmin(abs(yVals - far[1]))
 				higherY = newCx*len(yVals) + newCy
+
+				if higherY>len(Map):
+					print(far)
+					print(newCx,newCy)
+					print(higherY)
+					print(len(yVals)*len(xVals))
 					# higherX = np.searchsorted(Map[:,0], far[0])
 					# thatX = np.argwhere(Map[:,0] == Map[higherX,0])
 					# higherY = np.searchsorted(Map[thatX[:,0],1], far[1]) + higherX
@@ -112,8 +125,12 @@ class particleFilter:
 		# boundary, use self.curMin, self.curMax to check
 		
 		## Your Code start from here
-		
-		weighted = sum(np.multiply(self.particles,self.weights))
+		ranking = np.argsort(self.weights, axis = 0)
+		ranking = ranking[::-1]
+		ranking = ranking[:int(np.floor(self.numParticles/20))]
+
+		weighted = sum(np.multiply(self.particles[ranking, :],self.weights[ranking]))
+		weighted = weighted[0,:]
 		x = max(min(weighted[0], self.curMax[0]), self.curMin[0])
 		y = max(min(weighted[1], self.curMax[1]), self.curMin[1])
 		estimatePosition = [x, y]

@@ -26,11 +26,11 @@ from BasicDriving import Drive
 from csvmap import Map
 from Particle_Filter import particleFilter
 from reduced_Map import reducedMap
+from Trajectory_Generator import trajectoryGen
 import matplotlib
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-plt.close('all')
-
+import pandas as pd
 
 
 print ('Program started')
@@ -59,35 +59,40 @@ if clientID!=-1:
 	print('br_brake_handle: ',errorCode)
 
 	#Sensor Handles
-	errorCode,frontSensor_handle=vrep.simxGetObjectHandle(clientID,'frontSensor',vrep.simx_opmode_oneshot_wait)
-	print('frontSensor_handle: ',errorCode)
-	errorCode,rearSensor_handle=vrep.simxGetObjectHandle(clientID,'rearSensor',vrep.simx_opmode_oneshot_wait)
-	print('rearSensor_handle: ',errorCode)
-	errorCode,rightSensor_handle=vrep.simxGetObjectHandle(clientID,'rightSensor',vrep.simx_opmode_oneshot_wait)
-	print('rightSensor_handle: ',errorCode)
-	errorCode,leftSensor_handle=vrep.simxGetObjectHandle(clientID,'leftSensor',vrep.simx_opmode_oneshot_wait)
-	print('leftSensor_handle: ',errorCode)
-	sensor_handles = [frontSensor_handle, leftSensor_handle, rearSensor_handle, rightSensor_handle]
-
-	# topic = vrep.simxDefaultPublisher()
-
-	#Maximum steer angle
-	max_steer_angle=0.5235987
-	#Maximum torque of the motor
-	motor_torque=60
+	errorCode,Nsensor_handle=vrep.simxGetObjectHandle(clientID,'Nsensor',vrep.simx_opmode_oneshot_wait)
+	print('Nsensor_handle: ',errorCode)
+	errorCode,Ssensor_handle=vrep.simxGetObjectHandle(clientID,'Ssensor',vrep.simx_opmode_oneshot_wait)
+	print('Ssensor_handle: ',errorCode)
+	errorCode,Esensor_handle=vrep.simxGetObjectHandle(clientID,'Esensor',vrep.simx_opmode_oneshot_wait)
+	print('Esensor_handle: ',errorCode)
+	errorCode,Wsensor_handle=vrep.simxGetObjectHandle(clientID,'Wsensor',vrep.simx_opmode_oneshot_wait)
+	print('Wsensor_handle: ',errorCode)
+	errorCode,NEsensor_handle=vrep.simxGetObjectHandle(clientID,'NEsensor',vrep.simx_opmode_oneshot_wait)
+	print('NEsensor_handle: ',errorCode)
+	errorCode,SEsensor_handle=vrep.simxGetObjectHandle(clientID,'SEsensor',vrep.simx_opmode_oneshot_wait)
+	print('SEsensor_handle: ',errorCode)
+	errorCode,NWsensor_handle=vrep.simxGetObjectHandle(clientID,'NWsensor',vrep.simx_opmode_oneshot_wait)
+	print('NWsensor_handle: ',errorCode)
+	errorCode,SWsensor_handle=vrep.simxGetObjectHandle(clientID,'SWsensor',vrep.simx_opmode_oneshot_wait)
+	print('SWsensor_handle: ',errorCode)
+	sensor_handles = [Nsensor_handle, NWsensor_handle, Wsensor_handle, SWsensor_handle, Ssensor_handle, SEsensor_handle, Esensor_handle, NEsensor_handle]
 	
-	#Control differentials
-	dVel=0.5#1
+	#Initial parameters: Driving
+	goal = [-8.16, -3.1]
+	dVel=0.5
 	dSteer=0.1
-	
-	#Initial parameters
 	steer_angle=0
 	motor_velocity=dVel*10
 	brake_force=100
-	printCounter = 0;
 	left = True
+	motor_torque=60
+	max_steer_angle=0.5235987
+
+	#Initial parameters: Sensing
+	printCounter = 0
+	begin = True
 	sensorLength = 3
-	sensorN = 4
+	sensorN = 8
 	distances = sensorLength*np.ones(sensorN) #Front, Left, Back, Right
 
 	#Load Map File
@@ -98,18 +103,9 @@ if clientID!=-1:
 
 	#Initialize Particle Filter
 	pf = particleFilter(dimX, dimY, sensorLength)
-	realPos = np.array([])
-	estPos = np.array([])
-	begin = True
-	# plt.ion()
-	# fig, ax = plt.subplots()
-	# ax.scatter(walls[:,0], walls[:,1], label='Walls')
-	# plt.show()
-	# time.sleep(0.2)
 
-
-	#Initial Position
-	prev = np.array([])
+	#Initialize Trajectory Planner
+	tG = trajectoryGen(goal[0], goal[1])
 
 	if res==vrep.simx_return_ok:
 		print ('Number of objects in the scene: ',len(objs))
@@ -122,11 +118,10 @@ if clientID!=-1:
 	vrep.simxSetJointForce(clientID,br_brake_handle,0,vrep.simx_opmode_oneshot)
 	vrep.simxSetJointForce(clientID,bl_brake_handle,0,vrep.simx_opmode_oneshot)
 
-
 	# Now retrieve streaming data (i.e. in a non-blocking fashion):
 	startTime=time.time()
 	vrep.simxGetIntegerParameter(clientID,vrep.sim_intparam_mouse_x,vrep.simx_opmode_streaming) # Initialize streaming
-	while time.time()-startTime < 1000:
+	while time.time()-startTime < 100:
 
 		#Current Steer Position
 		err, steer_pos = vrep.simxGetJointPosition(clientID,steer_handle,vrep.simx_opmode_streaming)
@@ -152,50 +147,52 @@ if clientID!=-1:
 			isHead, euler = vrep.simxGetObjectOrientation(clientID, vehicle_handle, -1, vrep.simx_opmode_oneshot_wait)
 			heading = (euler[2] + np.pi/2) + 0.5*np.random.normal()
 
-			#True Vehicle Position: To change once vehicle control allows the prediction of Ut
+			#True Vehicle Position
 			isR, r = vrep.simxGetObjectPosition(clientID, vehicle_handle, -1, vrep.simx_opmode_oneshot_wait)
 			pos = np.array(r[:2])
-			if len(prev) == 0:
+
+			#Vehicle Motion: To change once control allows the prediction of Ut
+			if begin:
 				u_t = np.array([0,0])
 			else:
 				u_t = pos - prev
 			prev = pos
 
-
+			#Read Sensor Data
 			for i in range(0,len(sensor_handles)):
 				errorCode,detectionState,detectedPoint,detectedObjectHandle,detectedSurfaceNormalVector=vrep.simxReadProximitySensor(clientID,sensor_handles[i],vrep.simx_opmode_streaming) 
 				if detectionState:
 					distances[i] = np.linalg.norm(detectedPoint)
-				
 				else:
 				   distances[i] = sensorLength
 
+			#Initialize and propagate reduced map
 			if begin:
-				estimatePosition = pos + np.multiply(np.array([dimX/10, dimY/10]), np.random.rand(2))
-				rM = reducedMap(MapFile, estimatePosition[0], estimatePosition[1], sensorLength)
+				rM = reducedMap(MapFile, pos[0], pos[1], sensorLength)
+				realPos = np.array(pos)
+				estPos = np.array(pos)
+				desPos = np.array(pos)
+				begin = False
 			else:
 				rM.propagateMotion(MapFile, estimatePosition[0], estimatePosition[1])
 
+			df = pd.DataFrame(rM.cutMap)
+			df.to_csv('CutMap.csv', header=False, index=False)
+
 			#Based on Vehicle Movement, Heading, and Sensor Distances, estimate position
 			estimatePosition, particles = pf.runParticleFilter(u_t, rM.cutMap, heading, distances)
+
+			#Evaluate error of estimated position
 			err = np.linalg.norm(np.array(pos) - estimatePosition)
-			# print('Estimation Error(t = ', time.time()-startTime,'): ', err)
 			print('Estimated Position at t = ',int(time.time()-startTime),' : ', estimatePosition, '. Estimation Error: ', err)
-			realPos = np.append(realPos, np.array(pos), axis = 0)
-			estPos = np.append(estPos, estimatePosition, axis = 0)
-			#print(realPos)
 
-			# print(estimatePosition)
+			#Based on estimated position, define desired trajectory
+			xD, yD = tG.genDesired(estimatePosition[0], estimatePosition[1], rM.cutMap)
 
-			# ax.scatter(pf.particles[:,0], pf.particles[:,1], label='Particles')
-			# ax.scatter(estimatePosition[:][0], estimatePosition[:][1], label='Estimated Position')
-			# ax.scatter(pos[0], pos[1], label='Actual Position')
-			# ax.legend(loc = 2)
-			# plt.draw()
-			#print(distances)
-
-
-
+			#Store positions
+			realPos = np.vstack((realPos, np.array(pos)))
+			estPos = np.vstack((estPos, np.array(estimatePosition)))
+			desPos = np.vstack((desPos, np.array([xD, yD])))
 
 	vrep.simxSetJointForce(clientID,motor_handle,0,vrep.simx_opmode_oneshot)
 	vrep.simxSetJointForce(clientID,fr_brake_handle,brake_force,vrep.simx_opmode_oneshot)
@@ -214,13 +211,14 @@ if clientID!=-1:
 	# Now close the connection to V-REP:
 	vrep.simxFinish(clientID)
 
-	# #Plot Evolution of Trajectories
-	# fig, ax = plt.subplots()
-	# ax.scatter(walls[:,0], walls[:,1], label='Walls')
-	# ax.scatter(estPos[:][0], estPos[:][1], label='Estimated Trajectory')
-	# ax.scatter(realPos[0], realPos[1], label='Actual Trajectory')
-	# ax.legend(loc = 2)
-	# plt.show()
+	#Plot Evolution of Trajectories
+	fig, ax = plt.subplots()
+	ax.scatter(walls[:,0], walls[:,1], label='Walls')
+	ax.scatter(estPos[1:,0], estPos[1:,1], label='Estimated Trajectory')
+	ax.scatter(realPos[1:,0], realPos[1:,1], label='Actual Trajectory')
+	ax.scatter(desPos[1:,0], desPos[1:,1], label='Desired Trajectory')
+	ax.legend(loc = 2)
+	plt.show()
 
 else:
 	print ('Failed connecting to remote API server')

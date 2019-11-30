@@ -26,15 +26,15 @@ class Map:
 		self.n = 50
 		self.map = np.zeros([self.n ** 2, 3])
 		self.wall_thickness = 0.6
-		self.corridor_width = 6
+		self.corridor_width = 4
 		self.cuboid_size = 0.6
 		self.wall_height = 1
 		self.n_sin = 50  # Sinusoidal track boundary
-		self.rectangles = [Rectangle(x_center=0, y_center=0, x_dim=self.cuboid_size, y_dim=self.cuboid_size)]
+		self.rectangles = []#[Rectangle(x_center=0, y_center=0, x_dim=self.cuboid_size, y_dim=self.cuboid_size)]
 
 		for x in np.linspace(-self.x_dim / 2, self.x_dim / 2, self.n_sin):
 			for position in (-1, 1):
-				line = 5 * np.sin(x * 2 * np.pi / self.x_dim) + position * self.corridor_width * 0.5
+				line = 6 * np.sin(x * 2 * np.pi / self.x_dim) + position * self.corridor_width * 0.5
 				self.rectangles.append(
 					Rectangle(
 						x_center=x,
