@@ -67,5 +67,5 @@ class trajectoryGen:
 		# print('Att Grad = ',att)
 		# print('Rep Grad = ',rep)
 		# print('NewD = ',newD)
-		print('Negative Distance = ',negdis)
+		# print('Negative Distance = ',negdis)
 		return newD[0], newD[1]

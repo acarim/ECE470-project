@@ -26,7 +26,7 @@ class Map:
 		self.n = 50
 		self.map = np.zeros([self.n ** 2, 3])
 		self.wall_thickness = 0.6
-		self.corridor_width = 4
+		self.corridor_width = 6
 		self.cuboid_size = 0.6
 		self.wall_height = 1
 		self.n_sin = 50  # Sinusoidal track boundary
@@ -62,7 +62,7 @@ class Map:
 	def create_map(self):
 		X = np.linspace(-self.x_dim / 2, self.x_dim / 2, self.n)
 		Y = np.linspace(-self.y_dim / 2, self.y_dim / 2, self.n)
-		out = 0.001 * np.ones([self.n, self.n])
+		out = -0.001 * np.ones([self.n, self.n])
 		counter = 0
 
 		for i, x in enumerate(X):

@@ -1,18 +1,17 @@
 import numpy as np
-from csvmap import Map
 from Particle_Filter import particleFilter
 from reduced_Map import reducedMap
 import matplotlib
-import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import time
+import pandas as pd
 start_time = time.time()
 
 
 
 #Load Map File
 MapFile = np.genfromtxt('3Colmap.csv', delimiter=',')
-walls = np.array([x for x in MapFile if x[2]>0.001])
+walls = np.array([x for x in MapFile if x[2]>0])
 print("Load Map File: %s seconds" % (time.time() - start_time))
 start_time = time.time()
 
@@ -50,7 +49,7 @@ def readingMap(pos, Map, heading, sensorLength):
 
 u_t = [0, 0]
 pos = [-9.1, -2.3]#[+3.3750e+00, +4.7500e+00]
-sensorLength = 3
+sensorLength = 5
 rM = reducedMap(MapFile, pos[0], pos[1], sensorLength)
 print('rM.cutMap Lenght Initialized: ',len(rM.cutMap))
 
@@ -69,7 +68,11 @@ start_time = time.time()
 print('Imposed Position: ', pos)
 print('Front, Left, Back, Right Sensors: ', distances)
 
-pf = particleFilter()
+pf = particleFilter(MapFile, sensorLength = 5)
+
+fig, ax = plt.subplots()
+ax.scatter(walls[:,0], walls[:,1], label='Walls')
+ax.scatter(pf.particles[:,0], pf.particles[:,1], label = 'Initial Particles')
 
 print("Initialize Filter: %s seconds" % (time.time() - start_time))
 start_time = time.time()
@@ -84,15 +87,22 @@ print("Run Filter: %s seconds" % (time.time() - start_time))
 start_time = time.time()
 
 ranking = np.argsort(pf.weights, 0)
-ranking = ranking[::-1]
-ranking = ranking[:25]
-print('Top Particle Readings:')
-print(pf.readings[ranking, :])
+ranking = ranking[::-1,0]
 
-fig, ax = plt.subplots()
-ax.scatter(walls[:,0], walls[:,1], label='Walls')
-ax.scatter(pf.particles[:,0], pf.particles[:,1], c = np.ravel(pf.weights), cmap='gray', label='Particles')
-ax.scatter(pf.particles[ranking,0], pf.particles[ranking,1], label='Top 10 Weighted Particles')
+data = np.hstack((np.array(pos), distances, np.array([9999]), np.array([0, 0])))
+dis = np.transpose(np.array([[np.linalg.norm(pos - p) for p in pf.particles[ranking,:]]]))
+sens = np.transpose(np.array([[np.linalg.norm(distances - p) for p in pf.readings[ranking,:]]]))
+#print(ranking.shape, pf.particles[ranking,:].shape, pf.readings[ranking,:].shape, pf.weights[ranking,:].shape, dis.shape, sens.shape)
+partdata = np.hstack((pf.particles[ranking,:], pf.readings[ranking,:], pf.weights[ranking,:], dis, sens))
+data = np.vstack((data, partdata))
+df = pd.DataFrame(data, columns = ['PosX', 'PosY', 'Nsensor', 'NWsensor', 'Wsensor', 'SWsensor', 'Ssensor', 'SEsensor', 'Esensor', 'NEsensor', 'Weight', 'Physical Distance', 'Sensor Distance'])
+df.to_excel('Particle Data.xlsx')
+
+#ranking = ranking[:10]
+
+
+ax.scatter(pf.particles[:,0], pf.particles[:,1], label = 'Resampled Particles')#, c = np.ravel(pf.weights), cmap='gray', label='Particles')
+#ax.scatter(pf.particles[ranking,0], pf.particles[ranking,1], label='Top 10 Weighted Particles')
 ax.scatter(estimatePosition[:][0], estimatePosition[:][1], label='Estimated Position')
 ax.scatter(pos[0], pos[1], label='Actual Position')
 ax.legend(loc = 2)

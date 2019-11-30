@@ -3,9 +3,9 @@ from reduced_Map import reducedMap
 
 class particleFilter:
 	
-	def __init__(self, x_dim = 20, y_dim = 20, sensorLength = 3):
+	def __init__(self, Map, x_dim = 20, y_dim = 20, sensorLength = 5):
 		
-		self.numParticles = 500
+		self.numParticles = 200
 		self.dimension = 2
 		self.std = 5                                     
 		self.curMax = [x_dim/2, y_dim/2]                     
@@ -22,9 +22,16 @@ class particleFilter:
 		# Generate weight, initially all the weights for particle should be equal, namely 1/num_of_particles
 		# weights should be something like [1/num_of_particles, 1/num_of_particles, 1/num_of_particles, ...]
 
+		#Generate particles close to non-wall points of the Map, i.e. where the vehicle can actually be
+		nowalls = np.array([x for x in Map if x[2]<0])
+		self.particles = np.zeros((self.numParticles, 2))
+
+		for i in range(self.numParticles):
+			take = nowalls[np.random.randint(0,len(nowalls)), :2]
+			self.particles[i,:] = take + np.multiply(np.array([x_dim/50, y_dim/50]), np.random.uniform(-1,1,(1,2)))
 		
-		self.particles = np.random.uniform(-1,1,(self.numParticles,2))
-		self.particles = np.multiply(self.particles,self.curMax)
+		#self.particles = np.random.uniform(-1,1,(self.numParticles,2))
+		#self.particles = np.multiply(self.particles,self.curMax)
 		self.weights = (1/self.numParticles)*np.ones(self.numParticles)
 		self.readings = np.zeros((self.numParticles, self.sensorN))
 		# print('########## INITIAL PARTICLE DISTRIBUTION ##########', type(self.particles))
@@ -61,12 +68,13 @@ class particleFilter:
 
 		for i in range(0,self.numParticles):
 			rM = reducedMap(Map, self.particles[i, 0], self.particles[i, 1])
-			current = np.array(self.particles[i])
+			current = np.array(self.particles[i, :])
 			particleReading = np.array(self.readingMap(current, rM.cutMap, heading))
-			w_t[i] = np.exp( - np.linalg.norm(particleReading - robotReading)**2 / (2*self.std))
+			#w_t[i] = np.exp( - np.linalg.norm(particleReading - robotReading)**2 / (2*self.std))
+			w_t[i] = 1/np.linalg.norm(particleReading - robotReading)**4
 			self.readings[i, :] = particleReading
-			if sum(particleReading) == 0: #Directly exclude particles in walls
-				w_t[i] = 0
+			# if sum(particleReading) == 0: #Directly exclude particles in walls
+			# 	w_t[i] = 0
 
 
 		k = sum(w_t)
@@ -127,10 +135,11 @@ class particleFilter:
 		## Your Code start from here
 		ranking = np.argsort(self.weights, axis = 0)
 		ranking = ranking[::-1]
-		ranking = ranking[:int(np.floor(self.numParticles/20))]
+		#ranking = ranking[:int(np.floor(self.numParticles/5))]
 
 		weighted = sum(np.multiply(self.particles[ranking, :],self.weights[ranking]))
 		weighted = weighted[0,:]
+		#print(weighted, type(weighted), weighted.shape)
 		x = max(min(weighted[0], self.curMax[0]), self.curMin[0])
 		y = max(min(weighted[1], self.curMax[1]), self.curMin[1])
 		estimatePosition = [x, y]

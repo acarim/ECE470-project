@@ -23,7 +23,6 @@ except:
 import numpy as np
 import time
 from BasicDriving import Drive
-from csvmap import Map
 from Particle_Filter import particleFilter
 from reduced_Map import reducedMap
 from Trajectory_Generator import trajectoryGen
@@ -91,18 +90,18 @@ if clientID!=-1:
 	#Initial parameters: Sensing
 	printCounter = 0
 	begin = True
-	sensorLength = 3
+	sensorLength = 5
 	sensorN = 8
 	distances = sensorLength*np.ones(sensorN) #Front, Left, Back, Right
 
 	#Load Map File
 	MapFile = np.genfromtxt('3Colmap.csv', delimiter=',')
-	walls = np.array([x for x in MapFile if x[2]>0.001])
+	walls = np.array([x for x in MapFile if x[2]>0])
 	dimX = np.ptp(MapFile[:,0])
 	dimY = np.ptp(MapFile[:,1])
 
 	#Initialize Particle Filter
-	pf = particleFilter(dimX, dimY, sensorLength)
+	pf = particleFilter(MapFile, dimX, dimY, sensorLength)
 
 	#Initialize Trajectory Planner
 	tG = trajectoryGen(goal[0], goal[1])
@@ -121,7 +120,7 @@ if clientID!=-1:
 	# Now retrieve streaming data (i.e. in a non-blocking fashion):
 	startTime=time.time()
 	vrep.simxGetIntegerParameter(clientID,vrep.sim_intparam_mouse_x,vrep.simx_opmode_streaming) # Initialize streaming
-	while time.time()-startTime < 100:
+	while time.time()-startTime < 30:
 
 		#Current Steer Position
 		err, steer_pos = vrep.simxGetJointPosition(clientID,steer_handle,vrep.simx_opmode_streaming)
@@ -172,15 +171,15 @@ if clientID!=-1:
 				realPos = np.array(pos)
 				estPos = np.array(pos)
 				desPos = np.array(pos)
+				t = np.array([])
 				begin = False
 			else:
 				rM.propagateMotion(MapFile, estimatePosition[0], estimatePosition[1])
 
-			df = pd.DataFrame(rM.cutMap)
-			df.to_csv('CutMap.csv', header=False, index=False)
-
 			#Based on Vehicle Movement, Heading, and Sensor Distances, estimate position
-			estimatePosition, particles = pf.runParticleFilter(u_t, rM.cutMap, heading, distances)
+			# if printCounter % 100*10000 == 0:
+			# 	pf = particleFilter(MapFile, dimX, dimY, sensorLength)
+			estimatePosition, particles = pf.runParticleFilter(u_t, MapFile, heading, distances)
 
 			#Evaluate error of estimated position
 			err = np.linalg.norm(np.array(pos) - estimatePosition)
@@ -193,6 +192,7 @@ if clientID!=-1:
 			realPos = np.vstack((realPos, np.array(pos)))
 			estPos = np.vstack((estPos, np.array(estimatePosition)))
 			desPos = np.vstack((desPos, np.array([xD, yD])))
+			t = np.append(t, time.time()-startTime)
 
 	vrep.simxSetJointForce(clientID,motor_handle,0,vrep.simx_opmode_oneshot)
 	vrep.simxSetJointForce(clientID,fr_brake_handle,brake_force,vrep.simx_opmode_oneshot)
@@ -214,9 +214,9 @@ if clientID!=-1:
 	#Plot Evolution of Trajectories
 	fig, ax = plt.subplots()
 	ax.scatter(walls[:,0], walls[:,1], label='Walls')
-	ax.scatter(estPos[1:,0], estPos[1:,1], label='Estimated Trajectory')
-	ax.scatter(realPos[1:,0], realPos[1:,1], label='Actual Trajectory')
-	ax.scatter(desPos[1:,0], desPos[1:,1], label='Desired Trajectory')
+	ax.scatter(estPos[1:,0], estPos[1:,1], label='Estimated Trajectory')#, c = np.ravel(t), cmap='winter')
+	ax.scatter(realPos[1:,0], realPos[1:,1], label='Actual Trajectory')#, c = np.ravel(t), cmap='spring')
+	ax.scatter(desPos[1:,0], desPos[1:,1], label='Desired Trajectory')#, c = np.ravel(t), cmap='summer')
 	ax.legend(loc = 2)
 	plt.show()
 
