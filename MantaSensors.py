@@ -100,8 +100,9 @@ if clientID!=-1:
 	dimX = np.ptp(MapFile[:,0])
 	dimY = np.ptp(MapFile[:,1])
 
-	#Initialize Particle Filter
+	#Initialize Particle Filters
 	pf = particleFilter(MapFile, dimX, dimY, sensorLength)
+	pf2 = particleFilter(MapFile, dimX, dimY, sensorLength)
 
 	#Initialize Trajectory Planner
 	tG = trajectoryGen(goal[0], goal[1])
@@ -180,6 +181,8 @@ if clientID!=-1:
 			# if printCounter % 100*10000 == 0:
 			# 	pf = particleFilter(MapFile, dimX, dimY, sensorLength)
 			estimatePosition, particles = pf.runParticleFilter(u_t, MapFile, heading, distances)
+			estimatePosition2, particles2 = pf2.runParticleFilter(u_t, MapFile, heading, distances)
+			estimatePosition = [estimatePosition[i]/2 + estimatePosition2[i]/2 for i in range(0,2)]
 
 			#Evaluate error of estimated position
 			err = np.linalg.norm(np.array(pos) - estimatePosition)
