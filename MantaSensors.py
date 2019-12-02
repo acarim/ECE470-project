@@ -1,4 +1,4 @@
-# Make sure to have the server side running in V-REP: 
+# Make sure to have the server side running in V-REP:
 # in a child script of a V-REP scene, add following command
 # to be executed just once, at simulation start:
 #
@@ -22,7 +22,7 @@ except:
 
 import numpy as np
 import time
-from BasicDriving import Drive
+from BasicDriving import Driver
 from Particle_Filter import particleFilter
 from reduced_Map import reducedMap
 from Trajectory_Generator import trajectoryGen
@@ -75,9 +75,9 @@ if clientID!=-1:
 	errorCode,SWsensor_handle=vrep.simxGetObjectHandle(clientID,'SWsensor',vrep.simx_opmode_oneshot_wait)
 	print('SWsensor_handle: ',errorCode)
 	sensor_handles = [Nsensor_handle, NWsensor_handle, Wsensor_handle, SWsensor_handle, Ssensor_handle, SEsensor_handle, Esensor_handle, NEsensor_handle]
-	
+
 	#Initial parameters: Driving
-	goal = [-8.16, -3.1]
+	goal = [-8.5, -2.5]
 	dVel=0.5
 	dSteer=0.1
 	steer_angle=0
@@ -86,6 +86,7 @@ if clientID!=-1:
 	left = True
 	motor_torque=60
 	max_steer_angle=0.5235987
+	d = Driver()
 
 	#Initial parameters: Sensing
 	printCounter = 0
@@ -104,9 +105,6 @@ if clientID!=-1:
 	pf = particleFilter(MapFile, dimX, dimY, sensorLength)
 	pf2 = particleFilter(MapFile, dimX, dimY, sensorLength)
 
-	#Initialize Trajectory Planner
-	tG = trajectoryGen(goal[0], goal[1])
-
 	if res==vrep.simx_return_ok:
 		print ('Number of objects in the scene: ',len(objs))
 	else:
@@ -121,7 +119,7 @@ if clientID!=-1:
 	# Now retrieve streaming data (i.e. in a non-blocking fashion):
 	startTime=time.time()
 	vrep.simxGetIntegerParameter(clientID,vrep.sim_intparam_mouse_x,vrep.simx_opmode_streaming) # Initialize streaming
-	while time.time()-startTime < 30:
+	while time.time()-startTime < 80:
 
 		#Current Steer Position
 		err, steer_pos = vrep.simxGetJointPosition(clientID,steer_handle,vrep.simx_opmode_streaming)
@@ -132,20 +130,21 @@ if clientID!=-1:
 		bl_wheel_velocity = np.linalg.norm(bl_wheel_velocity)
 		br_wheel_velocity = np.linalg.norm(br_wheel_velocity)
 		rear_wheel_velocity=(bl_wheel_velocity+br_wheel_velocity)/2
-		linear_velocity=rear_wheel_velocity*0.09 
+		linear_velocity=rear_wheel_velocity*0.09
 
 		vrep.simxSetJointForce(clientID,motor_handle,motor_torque,vrep.simx_opmode_oneshot)
 
 		if printCounter % 10000 == 0:
 
-			#Control of Vehicle
-			motor_velocity, left, steer_angle = Drive(motor_velocity, left, steer_angle)
-			vrep.simxSetJointTargetVelocity(clientID,motor_handle,motor_velocity,vrep.simx_opmode_oneshot)
-			vrep.simxSetJointTargetPosition(clientID,steer_handle,steer_angle,vrep.simx_opmode_oneshot)
-
 			#Simulated Compass Data
 			isHead, euler = vrep.simxGetObjectOrientation(clientID, vehicle_handle, -1, vrep.simx_opmode_oneshot_wait)
 			heading = (euler[2] + np.pi/2) + 0.5*np.random.normal()
+
+			if time.time()-startTime > 5:
+				#Control of Vehicle
+				motor_velocity, steer_angle = d.Drive(realPos, desPos, heading)
+				vrep.simxSetJointTargetVelocity(clientID,motor_handle,motor_velocity,vrep.simx_opmode_oneshot)
+				vrep.simxSetJointTargetPosition(clientID,steer_handle,steer_angle,vrep.simx_opmode_oneshot)
 
 			#True Vehicle Position
 			isR, r = vrep.simxGetObjectPosition(clientID, vehicle_handle, -1, vrep.simx_opmode_oneshot_wait)
@@ -160,7 +159,7 @@ if clientID!=-1:
 
 			#Read Sensor Data
 			for i in range(0,len(sensor_handles)):
-				errorCode,detectionState,detectedPoint,detectedObjectHandle,detectedSurfaceNormalVector=vrep.simxReadProximitySensor(clientID,sensor_handles[i],vrep.simx_opmode_streaming) 
+				errorCode,detectionState,detectedPoint,detectedObjectHandle,detectedSurfaceNormalVector=vrep.simxReadProximitySensor(clientID,sensor_handles[i],vrep.simx_opmode_streaming)
 				if detectionState:
 					distances[i] = np.linalg.norm(detectedPoint)
 				else:
@@ -171,9 +170,15 @@ if clientID!=-1:
 				rM = reducedMap(MapFile, pos[0], pos[1], sensorLength)
 				realPos = np.array(pos)
 				estPos = np.array(pos)
-				desPos = np.array(pos)
 				t = np.array([])
+
+				#Generate Trajectory
+				tG = trajectoryGen(goal[0], goal[1])
+				desPos = tG.genTrajectory(pos, goal, MapFile, sensorLength = sensorLength)
+				newTake = list(range(0,len(desPos),7))
+				desPos = desPos[newTake]
 				begin = False
+
 			else:
 				rM.propagateMotion(MapFile, estimatePosition[0], estimatePosition[1])
 
@@ -188,13 +193,9 @@ if clientID!=-1:
 			err = np.linalg.norm(np.array(pos) - estimatePosition)
 			print('Estimated Position at t = ',int(time.time()-startTime),' : ', estimatePosition, '. Estimation Error: ', err)
 
-			#Based on estimated position, define desired trajectory
-			xD, yD = tG.genDesired(estimatePosition[0], estimatePosition[1], rM.cutMap)
-
 			#Store positions
 			realPos = np.vstack((realPos, np.array(pos)))
 			estPos = np.vstack((estPos, np.array(estimatePosition)))
-			desPos = np.vstack((desPos, np.array([xD, yD])))
 			t = np.append(t, time.time()-startTime)
 
 	vrep.simxSetJointForce(clientID,motor_handle,0,vrep.simx_opmode_oneshot)
@@ -222,10 +223,8 @@ if clientID!=-1:
 	ax.scatter(desPos[1:,0], desPos[1:,1], label='Desired Trajectory')#, c = np.ravel(t), cmap='summer')
 	ax.legend(loc = 2)
 	plt.show()
+	plt.savefig('MantaFigure.png')
 
 else:
 	print ('Failed connecting to remote API server')
 print ('Program ended')
-
-
-

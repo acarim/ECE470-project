@@ -1,72 +1,83 @@
 import numpy as np
 
-def updateVelocity(motor_velocity,dVel = 0.5):
-    #Evolution of Velocity
-    # if motor_velocity < 20*dVel:
-    #     motor_velocity += dVel
-    # else:
-    #     motor_velocity -= dVel
+class Driver:
 
-    #realPos = (xA, yA)  Input variables
-    #desPos = (xD, yD) Input variables
-    """Kp = 1
-    realPos = np.array((xA, yA))
-    desPos = np.array((xD, yD))
-    dist = numpy.linalg.norm(realPos-desPos) #Calculate absolute length between desPos and realPos
-    motor_velocity = Kp*distVector*dVel"""
+    def __init__(self, dSteer = 0.1, max_steer_angle = 0.5235987, dVel = 0.5):
+        self.dSteer = dSteer
+        self.max_steer_angle = max_steer_angle
+        self.dVel = dVel
+        self.index = 0
 
-    motor_velocity = 5*dVel
-    return motor_velocity
+    def updateVelocity(self, dVel = 0.5):
 
-def updateSteering(left,steer_angle,realPos,desPos,heading,dSteer = 0.1,max_steer_angle = 0.5235987):
-    # if left:
-    #     steer_angle -= dSteer
-    #     if steer_angle < -max_steer_angle:
-    #         left = False
-    # else:
-    #     steer_angle += dSteer
-    #     if steer_angle > max_steer_angle:
-    #         left = True
+        self.motor_velocity = 4*dVel
 
-    K = 0.5
-    # realPos = np.array((xA, yA))
-    # desPos = np.array((xD, yD))
-    desiredVector = desPos[-1,:]-realPos[-1,:]
-    x_axis_u = np.array([1, 0])
-    print('realPos: ', realPos[-1,:])
-    print('desPos: ', desPos[-1,:])
-    print ('Desired vector: ', desiredVector)
+    def nextDesPos(self, realPos, desPosarr):
+        # desPosarr = np.array([[-1.5,-2],[0,0],[1.5,2],[3,4]])
 
-    def unit_vector(vector):
-        #Returns the unit vector of the vector.
-        return vector / np.linalg.norm(vector)
+        desCut = desPosarr[self.index:,:]
+        distVec = np.zeros(len(desCut))
+        for i,p in enumerate(desCut):
+            dist = np.linalg.norm(realPos[-1,:]-desCut[i,:]) #Check which point is the closest
+            distVec[i] = dist
+        i = np.argmin(distVec)
+        if i > self.index :
+            self.index = i
 
-    def angle_between(v1, v2):
-        #Returns the angle in radians between vectors 'v1' and 'v2'
-        v1_u = unit_vector(v1)
-        v2_u = unit_vector(v2)
+        if np.min(distVec) < 1:
+            desPos = desCut[i+1]
+            self.index = self.index + 1
+        else:
+            desPos = desCut[i]
 
-        A = np.clip(np.dot(v1_u, v2_u), -1.0, 1.0)
-        angle_between = np.arctan2(np.sqrt(1-(A)**2), A)
-        return angle_between
+        self.desPos = desPos
+        return desPos
 
-    desiredAngle = angle_between(desiredVector, x_axis_u)       #In radians
+    def updateSteering(self, realPos, heading):
 
-    print('Heading angle: ', heading)
-    print('Desired angle: ', desiredAngle)
-    steer_angle = K*(desiredAngle-heading)
+        K = 0.35
 
-    if steer_angle<-max_steer_angle:
-        steer_angle=-max_steer_angle
-    if steer_angle>max_steer_angle:
-        steer_angle=max_steer_angle
+        desiredVector = self.desPos-realPos[-1,:]
+        x_axis_u = np.array([1, 0])
+        print('realPos: ', realPos[-1,:])
+        print('desPos: ', self.desPos, 'Index = ', self.index)
+        print ('Desired vector: ', desiredVector)
 
-    print('Steer angle: ', steer_angle)
+        def unit_vector(vector):
+            #Returns the unit vector of the vector.
+            return vector / np.linalg.norm(vector)
 
-    return left, steer_angle
+        def angle_between(v1, v2):
+            cosang = np.dot(v1, v2)
+            sinang = np.linalg.norm(np.cross(v1, v2))
+            angle_between = np.arctan2(sinang,cosang)
+            return angle_between
+
+        desiredAngle = angle_between(desiredVector, x_axis_u)       #In radians
+        if desiredVector[0]<0:
+            if desiredVector[1]<0:
+                desiredAngle=2*np.pi-desiredAngle
+
+        else:
+            desiredAngle=desiredAngle
+        print('Heading angle: ', heading)
+        print('Desired angle: ', desiredAngle)
+        steer_angle = K*(desiredAngle-heading)
+
+        if steer_angle<-self.max_steer_angle:
+            steer_angle=-self.max_steer_angle
+        if steer_angle>self.max_steer_angle:
+            steer_angle=self.max_steer_angle
+
+        print('Steer angle: ', steer_angle)
+
+        self.steer_angle = steer_angle
 
 
-def Drive(motor_velocity, left, steer_angle, realPos, desPos, heading, dSteer = 0.1, max_steer_angle = 0.5235987, dVel = 0.5):
-	left, steer_angle = updateSteering(left, steer_angle, realPos, desPos, heading, dSteer, max_steer_angle)
-	motor_velocity = updateVelocity(motor_velocity, dVel)
-	return motor_velocity, left, steer_angle
+    def Drive(self, realPos, desPosarr, heading):
+        self.nextDesPos(realPos, desPosarr)
+        self.updateSteering(realPos, heading)
+        self.updateVelocity()
+        motor_velocity = self.motor_velocity
+        steer_angle = self.steer_angle
+        return motor_velocity, steer_angle
